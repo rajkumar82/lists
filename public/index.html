@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Lists</title>
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1220" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Simple checklists as cards">
+  <link rel="icon" type="image/png" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Lists">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    :root {
+      --bg: #f4f6fb; --card: #ffffff; --card2: #eef1f8; --text: #1b1f2a; --muted: #6b7386; --line: #dfe3ee;
+      --accent: #1a73e8; --accent2: #7c4dff; --danger: #d93025;
+      --grad: linear-gradient(135deg, var(--accent), var(--accent2));
+      --shadow: 0 6px 24px rgba(30, 40, 90, 0.10);
+      --addbar: 64px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1220; --card: #181c2f; --card2: #20253b; --text: #eceffa; --muted: #98a1bb; --line: #2a3050; --danger: #ff6b60;
+        --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+      }
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; min-height: 100vh; min-height: 100dvh; color: var(--text); background: var(--bg);
+      font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overscroll-behavior-y: none;
+    }
+    body::before { /* soft colour glow behind everything */
+      content: ''; position: fixed; inset: 0; z-index: -1;
+      background:
+        radial-gradient(600px 300px at 90% -5%, rgba(124, 77, 255, 0.18), transparent 70%),
+        radial-gradient(500px 300px at -10% 0%, rgba(26, 115, 232, 0.16), transparent 70%);
+    }
+    @font-face { font-family: 'Dancing Script'; font-weight: 500; font-display: swap; src: url(fonts/dancing-script.ttf) format('truetype'); }
+    /* a notebook page lying at an angle behind everything, with cursive list items written on it */
+    #notebook { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; opacity: 0.5; }
+    #notebook .page {
+      --lh: 40px; --paper: #fffef9; --rule: #c9d8f2; --margin: #f0a4a4; --ink: rgba(52, 72, 170, 0.62);
+      position: absolute; left: 50%; top: 50%; width: min(96vw, 1100px); height: 94vh; height: 94dvh;
+      transform: translate(-50%, -50%) rotate(-5deg);
+      background-color: var(--paper);
+      background-image: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--lh) - 1.5px), var(--rule) calc(var(--lh) - 1.5px), var(--rule) var(--lh));
+      border-radius: 6px; box-shadow: 0 14px 50px rgba(30, 40, 90, 0.22); overflow: hidden;
+      padding: 0 16px 0 62px; font: 500 26px/var(--lh) 'Dancing Script', 'Segoe Script', 'Snell Roundhand', cursive; color: var(--ink);
+    }
+    #notebook .page::before { content: ''; position: absolute; top: 0; bottom: 0; left: 48px; width: 2px; background: var(--margin); }
+    #notebook .page::after { /* binding holes */
+      content: ''; position: absolute; top: 0; bottom: 0; left: 12px; width: 22px;
+      background: radial-gradient(circle at 11px 11px, var(--bg) 0 8px, transparent 9px) 0 8px / 22px 120px repeat-y;
+    }
+    #notebook p { margin: 0; white-space: nowrap; }
+    #notebook s { text-decoration-thickness: 2px; opacity: 0.75; }
+    @media (prefers-color-scheme: dark) {
+      #notebook .page { --paper: #171b30; --rule: #262d4d; --margin: #5b3150; --ink: rgba(150, 168, 255, 0.55); box-shadow: 0 14px 50px rgba(0, 0, 0, 0.5); }
+    }
+    [hidden] { display: none !important; }
+    button, input { font: inherit; color: inherit; }
+    button { cursor: pointer; border: 0; background: none; }
+    h1, p { margin: 0; }
+
+    #app { max-width: 640px; margin: 0 auto; padding: calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 28px); }
+    #app.has-add { padding-bottom: calc(50vh + env(safe-area-inset-bottom)); }
+
+    .top { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; min-height: 44px; }
+    html.pwa-btn-visible .top { padding-right: 46px; }
+    .top h1 { flex: 1; font-size: 1.4rem; font-weight: 700; }
+    .iconbtn { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow); font-size: 1.15rem; }
+    .iconbtn.danger { color: var(--danger); }
+    .iconbtn.plus { background: var(--grad); color: #fff; font-size: 1.6rem; line-height: 1; box-shadow: 0 6px 18px rgba(80, 90, 230, 0.35); }
+
+    /* home: one card per list */
+    #cards { display: grid; gap: 12px; }
+    a.card { --c: var(--accent); display: block; padding: 14px 16px 14px 18px; border-radius: 20px; color: inherit; text-decoration: none;
+      background: linear-gradient(135deg, color-mix(in srgb, var(--c) 16%, var(--card)), var(--card) 65%);
+      border: 1px solid color-mix(in srgb, var(--c) 25%, var(--line)); border-left: 6px solid var(--c); box-shadow: var(--shadow); }
+    a.card:active { border-color: var(--c); }
+    .card-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .card-name { font-size: 1.1rem; font-weight: 700; overflow-wrap: anywhere; }
+    .card-count { flex: none; padding: 2px 10px; border-radius: 999px; background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c); filter: brightness(0.85); font-size: 0.8rem; font-weight: 600; }
+    .peek { margin-top: 8px; color: var(--muted); font-size: 0.92rem; }
+    .peek div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .peek .done { text-decoration: line-through; opacity: 0.7; }
+    .peek .more { opacity: 0.8; }
+    .empty { text-align: center; color: var(--muted); margin-top: 70px; line-height: 1.6; }
+
+    /* list page */
+    .title { flex: 1; min-width: 0; font-size: 1.4rem; font-weight: 700; background: transparent; border: 0; padding: 6px 8px;
+      border-radius: 10px; font-family: inherit; }
+    .title:focus, .text:focus, #newitem:focus { outline: 2px solid var(--accent); }
+    #items { background: linear-gradient(160deg, color-mix(in srgb, var(--c) 12%, var(--card)), var(--card) 60%); border: 1px solid color-mix(in srgb, var(--c) 25%, var(--line)); border-top: 6px solid var(--c); border-radius: 20px; box-shadow: var(--shadow); padding: 6px 12px; }
+    .item { display: flex; align-items: center; gap: 12px; min-height: 52px; border-bottom: 1px solid var(--line); }
+    .item:last-child { border-bottom: 0; }
+    .item input[type=checkbox] { width: 24px; height: 24px; accent-color: var(--c, var(--accent)); flex: none; }
+    .text { flex: 1; min-width: 0; background: transparent; border: 0; padding: 8px 6px; border-radius: 8px; }
+    .item.done .text { text-decoration: line-through; color: var(--muted); }
+    .x { flex: none; width: 36px; height: 36px; border-radius: 50%; color: var(--muted); }
+
+    #addform { display: flex; gap: 10px; padding: 8px 0 6px; }
+    #newitem { flex: 1; min-width: 0; height: 44px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); }
+    #addform button { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--grad); color: #fff; font-size: 1.4rem; }
+    /* cursive for names and items; buttons and small labels stay plain for legibility */
+    :root { --hand: 'Dancing Script', 'Segoe Script', 'Snell Roundhand', cursive; }
+    .top h1, .card-name, .title { font-family: var(--hand); font-weight: 500; }
+    .top h1 { font-size: 2rem; }
+    .card-name { font-size: 1.6rem; line-height: 1.2; }
+    .title { font-size: 1.9rem; }
+    .item.added { animation: added 1.2s ease-out; }
+    @keyframes added { from { background: color-mix(in srgb, var(--c) 35%, transparent); } to { background: transparent; } }
+    .peek, .text, #newitem { font-family: var(--hand); font-weight: 500; }
+    .peek { font-size: 1.2rem; line-height: 1.3; }
+    .text { font-size: 1.4rem; }
+    #newitem { font-size: 1.25rem; }
+  </style>
+</head>
+<body>
+  <div id="notebook" aria-hidden="true"><div class="page">
+    <p>Milk</p>
+    <p><s>Eggs</s></p>
+    <p>Bread &amp; butter</p>
+    <p>Tomatoes</p>
+    <p><s>Call the plumber</s></p>
+    <p>Birthday gift for Amma</p>
+    <p>Old chargers to discard</p>
+    <p><s>Pay electricity bill</s></p>
+    <p>Rice, dal, oil</p>
+    <p>Fix the tap</p>
+    <p>Books to return</p>
+    <p><s>Soap</s></p>
+    <p>Torn clothes to donate</p>
+    <p>Light bulbs</p>
+    <p>Coffee powder</p>
+    <p><s>Batteries</s></p>
+    <p>Garden pots</p>
+    <p>Old magazines to discard</p>
+    <p>Fruits for Sunday</p>
+    <p><s>Postcards</s></p>
+    <p>Dish sponge</p>
+    <p>Plan the trip</p>
+    <p>Curry leaves</p>
+    <p><s>Stamps</s></p>
+    <p>Broken umbrella to discard</p>
+    <p>Notebooks</p>
+    <p>Snacks</p>
+    <p>Candles</p>
+  </div></div>
+  <div id="app">
+    <header class="top" id="top"></header>
+    <main id="view"></main>
+  </div>
+  <div hidden>
+    <form id="addform" autocomplete="off">
+      <input id="newitem" type="text" maxlength="200" placeholder="Add an item…" enterkeyhint="done" aria-label="New item">
+      <button type="submit" aria-label="Add item">＋</button>
+    </form>
+  </div>
+  <script src="/install.js" defer></script>
+  <script src="app.js"></script>
+</body>
+</html>
