@@ -129,6 +129,16 @@
     .empty p { font-size: 1.05rem; }
     .empty-plus { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%;
       background: var(--grad); color: #fff; font-weight: 700; vertical-align: middle; }
+    dialog.confirm { width: min(340px, calc(100vw - 32px)); padding: 22px 20px 18px; border-radius: 22px; color: var(--text);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--card)), var(--card) 70%);
+      border: 1px solid var(--line); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4); text-align: center; }
+    dialog.confirm::backdrop { background: rgba(8, 10, 25, 0.55); backdrop-filter: blur(3px); }
+    .dlg-title { font-family: var(--hand); font-size: 1.9rem; line-height: 1.2; margin-bottom: 6px; }
+    dialog.confirm p { color: var(--muted); overflow-wrap: anywhere; }
+    .dlg-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .dlg-btn { flex: 1; min-height: 44px; border-radius: 999px; background: var(--card2); font-weight: 600; }
+    .dlg-btn.danger { background: var(--danger); color: #fff; }
+    .dlg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   </style>
 </head>
 <body>

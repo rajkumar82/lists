@@ -40,6 +40,25 @@ function trashBtn(onClick) {
   return b;
 }
 
+// Themed replacement for the browser's confirm(): resolves true if the user taps Delete.
+function confirmDelete(message) {
+  return new Promise((resolve) => {
+    const cancel = el('button', { className: 'dlg-btn', type: 'button', textContent: 'Cancel', value: 'cancel' });
+    const ok = el('button', { className: 'dlg-btn danger', type: 'submit', textContent: 'Delete', value: 'ok' });
+    const dlg = el('dialog', { className: 'confirm' },
+      el('form', { method: 'dialog' },
+        el('div', { className: 'dlg-title', textContent: 'Delete this list?' }),
+        el('p', { textContent: message }),
+        el('div', { className: 'dlg-actions' }, cancel, ok)));
+    dlg.addEventListener('close', () => { dlg.remove(); resolve(dlg.returnValue === 'ok'); });
+    cancel.addEventListener('click', () => dlg.close('cancel'));
+    ok.addEventListener('click', () => dlg.close('ok'));
+    document.body.append(dlg);
+    dlg.showModal();
+    cancel.focus(); // the safe choice is the default
+  });
+}
+
 // Two screens on one page, switched by the URL hash: "" = all lists, "#/<id>" = one list.
 // Using the hash makes the phone's back button/gesture return to the lists.
 let current = null; // the list being shown, or null on the home screen
@@ -106,9 +125,9 @@ function showList() {
   topbar.replaceChildren(
     btn('iconbtn', '←', 'Back to lists', () => { location.hash = ''; }),
     title,
-    trashBtn(() => {
+    trashBtn(async () => {
       const n = list.items.length;
-      if (n && !confirm(`Delete "${list.name || 'Untitled'}" and its ${n} item${n > 1 ? 's' : ''}?`)) return;
+      if (n && !await confirmDelete(`"${list.name || 'Untitled'}" and its ${n} item${n > 1 ? 's' : ''} will be removed.`)) return;
       lists = lists.filter((l) => l !== list);
       save();
       location.hash = '';
