@@ -72,7 +72,9 @@ function showHome() {
   view.replaceChildren(el('div', { id: 'cards' }));
   const cards = view.firstChild;
   if (!lists.length) {
-    view.replaceChildren(el('p', { className: 'empty', textContent: 'No lists yet.\nTap "New list" to start.', style: 'white-space: pre-line' }));
+    view.replaceChildren(el('div', { className: 'empty' },
+      el('div', { className: 'empty-title', textContent: 'No lists yet' }),
+      el('p', {}, 'Tap ', el('span', { className: 'empty-plus', textContent: '＋' }), ' at the top to start your first list')));
     return;
   }
   for (const list of lists) cards.append(card(list));
