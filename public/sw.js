@@ -1,5 +1,5 @@
 // Minimal service worker: makes the app installable and lets it open offline (network-first, so edits show up at once; cache is the offline fallback).
-const CACHE = 'lists-v15';
+const CACHE = 'lists-v16';
 const SHELL = ['/', '/app.js', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png', '/install.js'];
 
 self.addEventListener('install', (e) => {
