@@ -1,21 +1,179 @@
-const KEY = 'lists.v1';
 const topbar = document.getElementById('top');
 const view = document.getElementById('view');
 const app = document.getElementById('app');
 const addform = document.getElementById('addform');
 const newItem = document.getElementById('newitem');
 
-function load() {
+// ---- accounts and sync ----
+// Lists live on the server, one private document per Google account. localStorage keeps a copy per account so the app opens
+// instantly and keeps working offline; edits made offline are flagged and pushed as soon as the network is back.
+const CACHE_PREFIX = 'lists.v2.';
+const LAST_USER = 'lists.lastUser';
+let config = null; // { clientId, gsiSrc } from the server
+let user = null; // { email, name } once signed in
+let lists = [];
+let updatedAt = 0; // server timestamp of the copy we last saw
+let dirty = false; // local edits not yet on the server
+let syncTimer = null;
+let syncing = false;
+
+async function api(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin',
+  });
+  if (res.status === 401) throw Object.assign(new Error('Signed out'), { signedOut: true });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+const cacheKey = () => CACHE_PREFIX + user.email;
+function readCache(email) {
   try {
-    const data = JSON.parse(localStorage.getItem(KEY));
-    if (Array.isArray(data)) return data;
+    const d = JSON.parse(localStorage.getItem(CACHE_PREFIX + email));
+    if (d && Array.isArray(d.lists)) return d;
   } catch {}
-  return [];
+  return null;
 }
-let lists = load();
+function writeCache() {
+  try { localStorage.setItem(cacheKey(), JSON.stringify({ lists, updatedAt, dirty })); } catch {}
+}
+
+// Called after every edit: write the local copy now, push to the server shortly (batching quick edits).
 function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(lists)); } catch {}
+  if (!user) return;
+  dirty = true;
+  writeCache();
+  scheduleSync();
 }
+function scheduleSync(delay = 700) {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(sync, delay);
+}
+async function sync() {
+  if (!dirty || syncing || !user) return;
+  syncing = true;
+  const snapshot = JSON.stringify(lists);
+  try {
+    const r = await api('PUT', '/api/lists', { lists });
+    updatedAt = r.updatedAt;
+    if (JSON.stringify(lists) === snapshot) dirty = false; else scheduleSync(0); // edited while saving
+    writeCache();
+  } catch (err) {
+    if (err.signedOut) { syncing = false; return showSignedOut('Your session ended. Please sign in again.'); }
+    scheduleSync(15000); // offline or server hiccup: try again later
+  }
+  syncing = false;
+}
+// Pick up changes made on another device when the app comes back to the front (never while typing or with unsaved edits).
+async function refresh() {
+  if (!user || dirty || syncing || document.activeElement?.tagName === 'INPUT') return;
+  try {
+    const d = await api('GET', '/api/lists');
+    if (d.updatedAt > updatedAt && !dirty) { lists = d.lists; updatedAt = d.updatedAt; writeCache(); route(); }
+  } catch (err) { if (err.signedOut) showSignedOut('Your session ended. Please sign in again.'); }
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refresh(); else sync(); });
+window.addEventListener('online', () => { sync(); refresh(); });
+window.addEventListener('pagehide', sync);
+
+function escapeHtml(text) { const d = document.createElement('div'); d.textContent = text; return d.innerHTML; }
+function setMenu() {
+  window.pwaMenuItems = user ? [
+    { html: `<div class="acct"><span class="avatar"><span class="avatar-initial">${escapeHtml((user.name || user.email || '?').trim().charAt(0).toUpperCase())}</span>${user.picture ? `<img src="${escapeHtml(user.picture)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span><span>Signed in as<br><b>${escapeHtml(user.email)}</b></span></div>` },
+    { label: 'Sign out', onClick: signOut, icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><path d="M21 12H9"/></svg>' },
+  ] : [];
+  if (window.pwaRenderMenu) window.pwaRenderMenu();
+}
+
+async function signOut() {
+  if (dirty) await sync(); // don't lose edits that haven't reached the server
+  try { await api('POST', '/api/auth/logout'); } catch {}
+  try { localStorage.removeItem(cacheKey()); localStorage.removeItem(LAST_USER); } catch {}
+  if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect();
+  showSignedOut();
+}
+
+// Starts the app for a signed-in user: server copy first, falling back to the local copy when offline or holding unsynced edits.
+async function start(who) {
+  user = who;
+  try { localStorage.setItem(LAST_USER, JSON.stringify(who)); } catch {}
+  const cached = readCache(who.email);
+  if (cached && cached.dirty) {
+    lists = cached.lists; updatedAt = cached.updatedAt; dirty = true;
+    scheduleSync(0);
+  } else {
+    try {
+      const d = await api('GET', '/api/lists');
+      lists = d.lists; updatedAt = d.updatedAt; dirty = false;
+      writeCache();
+    } catch (err) {
+      if (err.signedOut || !cached) throw err;
+      lists = cached.lists; updatedAt = cached.updatedAt; dirty = false; // offline: show the last copy we have
+    }
+  }
+  setMenu();
+  route();
+}
+
+let gsiLoading = null;
+function loadGoogle() {
+  gsiLoading = gsiLoading || new Promise((ok, fail) => {
+    const s = el('script', { src: config.gsiSrc, async: true });
+    s.onload = ok;
+    s.onerror = () => { gsiLoading = null; fail(new Error('Could not load Google sign-in. Check your connection and reload.')); };
+    document.head.append(s);
+  });
+  return gsiLoading;
+}
+function signinError(text) { const e = document.getElementById('signin-err'); if (e) e.textContent = text; }
+
+function showSignedOut(message) {
+  user = null; lists = []; current = null; dirty = false; clearTimeout(syncTimer);
+  setMenu();
+  document.title = 'Lists';
+  app.classList.remove('has-add');
+  topbar.replaceChildren(el('h1', { textContent: 'Lists' }));
+  view.replaceChildren(el('div', { className: 'empty signin' },
+    el('div', { className: 'empty-title', textContent: 'Welcome' }),
+    el('p', { textContent: 'Sign in with Google to keep your lists safe and see them on all your devices. Your lists are private to your account.' }),
+    el('div', { id: 'gbtn' }),
+    el('p', { id: 'signin-err', className: 'signin-err', textContent: message || '' })));
+  if (!config) { signinError('Could not reach the server. Check your connection and reload.'); return; }
+  loadGoogle().then(() => {
+    google.accounts.id.initialize({
+      client_id: config.clientId,
+      ux_mode: 'popup',
+      callback: async (resp) => {
+        signinError('');
+        try {
+          const r = await api('POST', '/api/auth/google', { credential: resp.credential });
+          await start(r.user);
+        } catch { signinError('Sign-in failed. Please try again.'); }
+      },
+    });
+    google.accounts.id.renderButton(document.getElementById('gbtn'), { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with' });
+  }).catch((err) => signinError(err.message));
+}
+
+async function boot() {
+  try { config = await (await fetch('/api/config')).json(); } catch { config = null; }
+  try {
+    await start((await api('GET', '/api/me')).user);
+  } catch (err) {
+    if (err.signedOut) return showSignedOut();
+    // No network: open the last signed-in account from this device's copy, if there is one.
+    try {
+      const last = JSON.parse(localStorage.getItem(LAST_USER));
+      if (last && readCache(last.email)) return await start(last);
+    } catch {}
+    showSignedOut('You appear to be offline. Connect to sign in.');
+  }
+}
+
 // Each list gets one of a few theme colours, picked from its id so it never changes.
 const COLORS = ['#1a73e8', '#4a6cf0', '#6c58f5', '#7c4dff']; // stops along the theme's blue-to-violet gradient
 const colorOf = (list) => COLORS[[...list.id].reduce((n, ch) => n + ch.charCodeAt(0), 0) % COLORS.length];
@@ -64,6 +222,7 @@ function confirmDelete(message) {
 let current = null; // the list being shown, or null on the home screen
 
 function route() {
+  if (!user) return;
   // A list that was opened but never named or filled (e.g. "New list" then back) is dropped.
   if (current && !current.name.trim() && !current.items.length) {
     lists = lists.filter((l) => l !== current);
@@ -185,4 +344,4 @@ addform.addEventListener('submit', (e) => {
 });
 
 window.addEventListener('hashchange', route);
-route();
+boot();
