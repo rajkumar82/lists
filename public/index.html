@@ -75,7 +75,9 @@
     html.pwa-btn-visible .top { padding-right: 46px; }
     .top h1 { flex: 1; font-size: 1.4rem; font-weight: 700; }
     .iconbtn { flex: none; width: 44px; height: 44px; border-radius: 50%; background: var(--card); box-shadow: var(--shadow); font-size: 1.15rem; }
-    .iconbtn.danger { color: var(--danger); }
+    .iconbtn svg { display: block; margin: auto; }
+    .iconbtn.trash { color: var(--muted); }
+    .iconbtn.trash:hover, .iconbtn.trash:active { color: var(--danger); }
     .iconbtn.plus { background: var(--grad); color: #fff; font-size: 1.6rem; line-height: 1; box-shadow: 0 6px 18px rgba(80, 90, 230, 0.35); }
 
     /* home: one card per list */

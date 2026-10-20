@@ -33,6 +33,13 @@ function btn(className, text, label, onClick) {
   return b;
 }
 
+// Outline trash can in the current text colour, so it matches the other round buttons.
+function trashBtn(onClick) {
+  const b = btn('iconbtn trash', '', 'Delete list', onClick);
+  b.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+  return b;
+}
+
 // Two screens on one page, switched by the URL hash: "" = all lists, "#/<id>" = one list.
 // Using the hash makes the phone's back button/gesture return to the lists.
 let current = null; // the list being shown, or null on the home screen
@@ -97,7 +104,7 @@ function showList() {
   topbar.replaceChildren(
     btn('iconbtn', '←', 'Back to lists', () => { location.hash = ''; }),
     title,
-    btn('iconbtn danger', '🗑', 'Delete list', () => {
+    trashBtn(() => {
       const n = list.items.length;
       if (n && !confirm(`Delete "${list.name || 'Untitled'}" and its ${n} item${n > 1 ? 's' : ''}?`)) return;
       lists = lists.filter((l) => l !== list);
