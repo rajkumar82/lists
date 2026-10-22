@@ -30,11 +30,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Lists">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="/brand.css">
   <style>
     :root {
       --bg: #f4f6fb; --card: #ffffff; --card2: #eef1f8; --text: #1b1f2a; --muted: #6b7386; --line: #dfe3ee;
       --accent: #1a73e8; --accent2: #7c4dff; --danger: #d93025;
-      --grad: linear-gradient(135deg, var(--accent), var(--accent2));
+     
       --shadow: 0 6px 24px rgba(30, 40, 90, 0.10);
       --addbar: 64px;
     }
@@ -209,5 +210,6 @@
   </div>
   <script src="/install.js" defer></script>
   <script src="app.js"></script>
+  <script src="/ping.js" data-app="lists" data-version="1" data-endpoint="https://feedback.nocod.dev/api/ping" defer></script>
 </body>
 </html>
